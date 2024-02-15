@@ -72,7 +72,6 @@ class Triplet {
         let n       = here.n;
         let nfix    = "";
         let ordPref = (context == "ordinal");
-        let wasCounting = false;
         
         
         if (index > 0) {
@@ -91,9 +90,8 @@ class Triplet {
                         noun = tripletUnits[index];
                                                                        
                     } else {
-                        noun    = tripletUnits[index];
-                        wasCounting = true;
-                        context = "objects";                        
+                        noun        = tripletUnits[index];
+                        context     = "objects";                        
                     }
                     break;
                     
@@ -127,12 +125,13 @@ class Triplet {
             }
             context = "objects";
         }
+        
 
         // 
         if ((n == 11 || n > 12) && context == "people") {
             context = "objects";
         }
-
+        
         let res;
         
         // There are a varity of special cases for n<3
@@ -465,6 +464,12 @@ class Triplet {
             if (noun == null || noun.length == 0) {
                 return noun;
             }
+            
+            // Special case that comes up in fractions.
+            if (noun == "fichiú") {
+                return noun;
+            }
+            
             let init = noun.substring(0,1);
             let type = lenites[init];
             if (!type){

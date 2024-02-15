@@ -1,6 +1,7 @@
 import {Component, createRef} from 'react';
 
 import parse from "./parse.js";
+import fractParse from "./fractParse.js";
 import Tests from "./Tests.js";
 
 class App extends Component {
@@ -13,13 +14,21 @@ class App extends Component {
                       number: "", 
                       context: "counting", 
                       noun: "", 
-                      minSimple: 100,
+                      simple: true,
                       result: ""};
                 
         this.checkParameters();
         this.startState= {...this.state};
         delete this.startState.language; // Don't switch languages on a reset.
     }
+    // Regex for integers or decimals.
+    // Note the use of the named reference 'com' to ensure that commas are
+    // used consistently.
+    static regex =/^([+-])?\s*(\d\d?\d?((?<com>,)?\d{3})?(\k<com>\d{3})*)(\.\d*)?$/;
+    
+    // Regex for fractions.
+    static fract =/^([+-])?\s*(\d+)\s*\/\s*(\d+)$/;
+
     
     checkParameters() {
         let state = this.state;
@@ -61,14 +70,17 @@ class App extends Component {
         }
         
         tst = ""
-        if (sp.has("minSimple")) {
-            tst = sp.get("minSimple");
+        if (sp.has("simple")) {
+            tst = sp.get("simple");
         } else if (sp.has("simplithe")) {
             tst = sp.get("simplithe");
         }
+  
         if (tst) {
-            if (!Number.isNaN(parseInt(tst))) {
-                state.minSimple = tst;
+            if (tst == "t"  || tst == "1"  || tst == "true") {
+                state.simple = true;
+            } else {
+                state.simple = false;
             }
         }
         
@@ -99,8 +111,8 @@ class App extends Component {
     updateNoun(e) {        
         this.setState({noun:e.target.value}, this.mayShow.bind(this));
     }
-    updateSimpleLimit(e) {
-        this.setState({minSimple:e.target.value}, this.mayShow.bind(this));
+    updateSimple(e) {
+        this.setState({simple:!this.state.simple}, this.mayShow.bind(this));
     }
     
     updateContext(e) {
@@ -124,13 +136,19 @@ class App extends Component {
         if (this.testing) {
             return;
         }
-        let num = parseFloat(this.state.number);
-        if (!Number.isNaN(num)) {
-            this.show();
+        
+        let number = this.state.number.trim();
+        if (App.regex.test(number)) {
+            this.show(number);
+        } else if (App.fract.test(number)) {
+            this.showFract(number);
+        } else {
+            this.setResult("");
         }
     }
-    show() {
-        parse(this.setResult.bind(this), this.warn.bind(this), {...this.state});
+    show(number) {
+        let numb = parse(number, this.state.context, this.state.noun, this.state.simple, this.warn.bind(this));
+        this.setResult(numb);
     }
     
     renderTesting() {
@@ -140,6 +158,22 @@ class App extends Component {
                 <pre>{text}</pre>
                 </div>
                 );
+        
+    }
+    
+    showFract(number) {
+        let fields = number.match(App.fract);
+        let sign = fields[1];
+        let num  = fields[2];
+        let denom = fields[3];
+        if (num.startsWith("0")  && num.length > 1) {
+            this.setResult("Error: illegal leading 0 in numerator");
+        } else if (denom.startsWith("0") && denom.length > 1) {
+            this.setResult("Error: illegal leading 0 in denominator");
+        }
+        let res = fractParse(sign, num, denom, this.state.noun, this.state.simple, this.warn.bind(this));
+        this.setResult(res);
+        
         
     }
     render() {
@@ -176,8 +210,8 @@ class App extends Component {
         return ( 
                 <div>
         <button onClick={this.changeLanguage.bind(this)}>{changeTo}</button>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="help.html">Help</a><br/>
-                    <h2> Rendering Irish Numbers into Text </h2>
-                    Enter a number and select the options for rendering as Irish words.
+                    <h2> Rendering Numbers into Irish Text </h2>
+                    Enter a number and select the options for rendering.
                       <hr/><br/>
                       <table><tbody>
                       <tr><th align="right">Number:</th><td><input id="number" size="20" value={this.state.number} onChange={this.updateNumber.bind(this)}/></td></tr>
@@ -189,8 +223,8 @@ class App extends Component {
                         <option value="ordinal">Ordering Things or People</option>
                         </select></td></tr>
                         <tr><th align="right">Noun:</th><td><input id="noun" size="15" value={this.state.noun} onChange={this.updateNoun.bind(this)}/></td></tr>
-                      <tr><th align="right">Simplified above:</th><td><input id="minSimple" size="10" value={this.state.minSimple}
-                       onChange={this.updateSimpleLimit.bind(this)} /></td></tr> 
+                      <tr><th align="right">Simple formats:</th><td><input id="simple" type="checkbox" checked={this.state.simple} 
+                       onChange={this.updateSimple.bind(this)} /></td></tr> 
                        </tbody></table>
                        <hr/>
                     <button onClick={this.reset.bind(this)}> Reset</button>
@@ -205,8 +239,8 @@ class App extends Component {
         return ( 
                 <div>
                     <button onClick={this.changeLanguage.bind(this)}>{changeTo}</button>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="help.html">Help</a><br/>
-                    <h2>Uimhreacha Gaeilge a Chur i bhFocail </h2>
-                      Iontráil uimhir agus roghnaigh na roghanna chun focail Gaeilge a rindreáil.                      <hr/><br/>
+                    <h2>Uimhreacha a Chur i bhFocail </h2>
+                      Iontráil uimhir agus roghnaigh na roghanna chun focail a rindreáil.                      <hr/><br/>
                       <table><tbody>
                       <tr><th align="right">Uimhir:</th><td><input id="number" size="20" value={this.state.number} onChange={this.updateNumber.bind(this)}/></td></tr>
                       <tr><th align="right">Cineál uimhir:</th><td>
@@ -217,8 +251,8 @@ class App extends Component {
                         <option value="ordinal">Orduimhir</option>
                         </select></td></tr>
                         <tr><th align="right">Ainmfhocal:</th><td><input id="noun" size="15" value={this.state.noun} onChange={this.updateNoun.bind(this)}/></td></tr>
-                      <tr><th align="right">Simplithe thuas:</th><td><input id="minSimple" size="10" value={this.state.minSimple}
-                       onChange={this.updateSimpleLimit.bind(this)} /></td></tr> 
+                      <tr><th align="right">Foirm simplithe:</th><td><input id="simple" size="10" type="checkbox" checked={this.state.simple}
+                       onChange={this.updateSimple.bind(this)} /></td></tr> 
                        </tbody></table>
                       <hr/>
                     <button onClick={this.reset.bind(this)}> Athshocrú </button>

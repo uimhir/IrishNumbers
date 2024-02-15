@@ -1,75 +1,71 @@
 import parse from "./parse.js";
+import fractParse from "./fractParse.js";
+import App from "./App.js";
+
+// This class runs a series of tests against the renderer.
+// These tests are mostly derived from Chapter 9 of the Caighdean Oifigiul
+// Note that many of the examples given there relate to the other than
+// the nominative case or to how adjectives are affected by numbers.
+// Some also, especially for fractions, illustrate options for rendering
+// that this program does not support.  With those constraints in mind
+// the goal is for all pass examples in the standard.
+//
+// Additional tests that check special cases not in the examples given in the
+// standard are are also included, especially in the case of decimal numbers
+// for which the standard gives no tabular examples.
+//
+// A couple of tests in the personal numbers (table 9s) were modified (1 bean -> bean rather than bean amhain)
+// which is a different option but seemingly valid by the text.
+// One test (in 9c) is deliberately failed since it requires eclipsis of the word for billion
+// making 17,000,000,000 indistinguishable from 17,000,000 orally.
+// 
+// One test (table 9dd) in fractions was omitted since it used a denominator that our
+// program chose to render using a different option. 
 
 class Tests {
     
     
     results() {
         const testData = [
-            {inputs: {number:"1"}, output: "a haon"},
-            {inputs: {number:"4"}, output: "a ceathair"},
-            {inputs: {number:"21"}, output: "fiche a haon"},
             
-// Table 9c
-{inputs: {number:"100"}, output:"céad"},
-{inputs: {number:"200"}, output:"dhá chéad"},
-{inputs: {number:"1,000"}, output:"míle"},
-{inputs: {number:"4,000"}, output:"ceithre mhíle"},
-{inputs: {number:"1,000,000"}, output:"milliún"},
-{inputs: {number:"5,000,000"}, output:"cúig mhilliún"},
-{inputs: {number:"1,000,000,000"}, output:"billiún"}, 
-{inputs: {number:"17,000,000,000"}, output:"seacht mbilliún déag"},
-// Table 9D
-{inputs: {number:"103"}, output:"céad a trí"},
-{inputs: {number:"1,001"}, output:"míle a haon"},      
-{inputs: {number:"115"}, output:"céad a cúig déag"},
-{inputs: {number:"1126"}, output: "míle, céad fiche a sé"},
-{inputs: {number:"120"}, output:"céad fiche"},
-{inputs: {number:"1,230"}, output:"míle, dhá chéad tríocha"},
-{inputs: {number:"120"}, output:"céad fiche"}, 
-{inputs: {number:"1,230"}, output:"míle, dhá chéad tríocha"},
-{inputs: {number:"181"}, output:"céad ochtó a haon"}, 
-{inputs: {number:"2,915"}, output:"dhá mhíle, naoi gcéad a cúig déag"},
-{inputs: {number:"273"}, output:"dhá chéad seachtó a trí"}, 
-{inputs: {number:"3,824"}, output:"trí mhíle, ocht gcéad fiche a ceathair"},
-{inputs: {number:"355"}, output:"trí chéad caoga a cúig"}, 
-{inputs: {number:"4,733"}, output:"ceithre mhíle, seacht gcéad tríocha a trí"},
-{inputs: {number:"446"}, output:"ceithre chéad daichead a sé"}, 
-{inputs: {number:"5,642"}, output:"cúig mhíle, sé chéad daichead a dó"},
-{inputs: {number:"519"}, output:"cúig chéad a naoi déag"}, 
-{inputs: {number:"6,551"}, output:"sé mhíle, cúig chéad caoga a haon"},
-{inputs: {number:"657"}, output:"sé chéad caoga a seacht"}, 
-{inputs: {number:"7,460"}, output:"seacht míle, ceithre chéad seasca"},
-{inputs: {number:"734"}, output:"seacht gcéad tríocha a ceathair"}, 
-{inputs: {number:"8,379"}, output:"ocht míle, trí chéad seachtó a naoi"},
-{inputs: {number:"818"}, output:"ocht gcéad a hocht déag"}, 
-{inputs: {number:"9,288"}, output:"naoi míle, dhá chéad ochtó a hocht"},
-{inputs: {number:"999"}, output:"naoi gcéad nócha a naoi"}, 
-{inputs: {number:"9,999"}, output:"naoi míle, naoi gcéad nócha a naoi"}
         ];
+        // 9.2 maoluimhir
+        testData.push(...table9a());
+        testData.push(...table9b());
+        testData.push(...table9c());
+        testData.push(...table9d());
+        testData.push(...table9e());
+        // 9.3 bunuimhir
+        testData.push(...table9f());
+        testData.push(...table9h());
+        testData.push(...table9n());
+        testData.push(...table9o());
+        // 9.4 uimhir phearsanta
+        testData.push(...table9s());
+        // 9.5 orduimhir
+        testData.push(...table9v());
+        testData.push(...table9w());
+        // 9.6 codán
+        testData.push(...table9y());
+        testData.push(...table9aa());
+        testData.push(...table9dd());
         
-            testData.push(...table9a());
-            testData.push(...table9b());
-            // 9c and 9d entered manually above.
-            testData.push(...table9e());
-            testData.push(...table9f());
-            testData.push(...table9h());
-            testData.push(...table9n());
-            testData.push(...table9o());
-            testData.push(...table9s());
-            testData.push(...table9v());
-            testData.push(...table9w());
+        // 9.7 uimhir deachúlach
+        // No tables in 9.7.  We do some decimals and grab
+        // some examples from the text.  Also test +/- prefixes.
+        testData.push(...plusMinusDecimal());
         
-        let dfts = {context: "counting", minSimple: 100, noun: "", number: ""};
+        let dfts = {context: "counting", simple: true, noun: "", number: ""};
         
         let result = null;
-        
-        function showResult(text) {
-            result = text;
-        }
-        
+                
         let summary = "";  
         let countOK  = 0;
         let countErr = 0;
+        function showWarning(text) {
+            console.log("Got warning:",text);
+            
+        }
         
         for (let i=0; i<testData.length; i += 1) {
             let inputs = testData[i].inputs; 
@@ -78,18 +74,19 @@ class Tests {
                 state[field] = inputs[field];
             }
             
-            parse(showResult, showResult, state)
+            result = doParse(state)
             if (result == testData[i].output) {
                 countOK += 1;
             } else {
                 countErr += 1;
                 let diffPos = differ(result, testData[i].output);
-                summary += "Test "+i+", diff at "+diffPos + " for " + state.number+" "+state.context+" "+state.noun+" "+state.minSimple+": Got '"+result+"' not '"+testData[i].output+"' \n";
+                summary += "Test "+i+", diff at "+diffPos + " for " + state.number+" ["+state.context+"/"+state.noun+"/"+state.simple+"]: Got '"+result+"' not '"+testData[i].output+"' \n";
             }            
         }
         summary += "\n\nSummary:\n";
-        summary += "Count Passed:"+countOK+"\n";
-        summary += "Count Failed:"+countErr +"\n";
+        summary += "\nTotal number of tests: "+testData.length+"\n";
+        summary += "Count Passed: "+countOK+"\n";
+        summary += "Count Failed: "+countErr +"\n";
         
         return summary;
         
@@ -106,6 +103,15 @@ class Tests {
                     return pos;
                 }
                 pos += 1;
+            }
+        }
+        
+        function doParse(state) {
+            if (state.number.indexOf("/") > 0) {
+                let vals = state.number.match(App.fract);
+                return fractParse(vals[1], vals[2], vals[3], state.noun, state.simple, showWarning);
+            } else {
+                return parse(state.number, state.context, state.noun, state.simple, showWarning);
             }
         }
         
@@ -189,7 +195,49 @@ class Tests {
             return outs;
 
         }
-       
+        
+        function table9c() {
+             return [
+{inputs: {number:"100"}, output:"céad"},
+{inputs: {number:"200"}, output:"dhá chéad"},
+{inputs: {number:"1,000"}, output:"míle"},
+{inputs: {number:"4,000"}, output:"ceithre mhíle"},
+{inputs: {number:"1,000,000"}, output:"milliún"},
+{inputs: {number:"5,000,000"}, output:"cúig mhilliún"},
+{inputs: {number:"1,000,000,000"}, output:"billiún"}, 
+// This test should fail since we do not do eclipsis of billiun.
+{inputs: {number:"17,000,000,000"}, output:"seacht mbilliún déag"}];
+        }
+        function table9d() {
+            return [
+// Table 9D
+{inputs: {number:"103"}, output:"céad a trí"},
+{inputs: {number:"1,001"}, output:"míle a haon"},      
+{inputs: {number:"115"}, output:"céad a cúig déag"},
+{inputs: {number:"1126"}, output: "míle, céad fiche a sé"},
+{inputs: {number:"120"}, output:"céad fiche"},
+{inputs: {number:"1,230"}, output:"míle, dhá chéad tríocha"},
+{inputs: {number:"120"}, output:"céad fiche"}, 
+{inputs: {number:"1,230"}, output:"míle, dhá chéad tríocha"},
+{inputs: {number:"181"}, output:"céad ochtó a haon"}, 
+{inputs: {number:"2,915"}, output:"dhá mhíle, naoi gcéad a cúig déag"},
+{inputs: {number:"273"}, output:"dhá chéad seachtó a trí"}, 
+{inputs: {number:"3,824"}, output:"trí mhíle, ocht gcéad fiche a ceathair"},
+{inputs: {number:"355"}, output:"trí chéad caoga a cúig"}, 
+{inputs: {number:"4,733"}, output:"ceithre mhíle, seacht gcéad tríocha a trí"},
+{inputs: {number:"446"}, output:"ceithre chéad daichead a sé"}, 
+{inputs: {number:"5,642"}, output:"cúig mhíle, sé chéad daichead a dó"},
+{inputs: {number:"519"}, output:"cúig chéad a naoi déag"}, 
+{inputs: {number:"6,551"}, output:"sé mhíle, cúig chéad caoga a haon"},
+{inputs: {number:"657"}, output:"sé chéad caoga a seacht"}, 
+{inputs: {number:"7,460"}, output:"seacht míle, ceithre chéad seasca"},
+{inputs: {number:"734"}, output:"seacht gcéad tríocha a ceathair"}, 
+{inputs: {number:"8,379"}, output:"ocht míle, trí chéad seachtó a naoi"},
+{inputs: {number:"818"}, output:"ocht gcéad a hocht déag"}, 
+{inputs: {number:"9,288"}, output:"naoi míle, dhá chéad ochtó a hocht"},
+{inputs: {number:"999"}, output:"naoi gcéad nócha a naoi"}, 
+{inputs: {number:"9,999"}, output:"naoi míle, naoi gcéad nócha a naoi"}];
+        }
         
         function table9e() {
             let ins = [
@@ -206,7 +254,7 @@ class Tests {
             let outs = [];
             for (let i=0; i<ins.length; i += 1) {
                 let xx = ins[i];
-                outs[i]= {inputs: {number:xx[0], minSimple:-1},output:xx[1].trim()};
+                outs[i]= {inputs: {number:xx[0], simple:false},output:xx[1].trim()};
             }
             for (let i=0; i<ins.length; i += 1) {
                 let xx = ins[i];
@@ -260,7 +308,7 @@ class Tests {
 // do not seimhiu deag after euro.,
     [14, "euro", "ceithre euro déag"],
 // Added due to case discussed in 9.3.1.h/i, final clause
-// Do not seimhiu cent
+// Do not uru or seimhiu euro or cent
     [14, "cent", "ceithre cent déag"],
     [18, "cent", "ocht cent déag"],
     [18, "euro", "ocht euro déag"]];
@@ -323,12 +371,12 @@ class Tests {
             let outs = [];
             for (let i=0; i<ins.length; i += 1) {
                 let xx = ins[i];
-                outs[i]= {inputs: {number:""+xx[0], context: "objects", noun: xx[1]},output:xx[2].trim()};
+                outs[i]= {inputs: {number:""+xx[0], context: "objects", noun: xx[1], simple: false},output:xx[2].trim()};
             }
             
             for (let i=0; i<ins.length; i += 1) {
                 let xx = ins[i];
-                outs[i+ins.length]= {inputs: {number:""+xx[0], context: "objects", noun: xx[1], minSimple: 20},output:xx[3].trim()};
+                outs[i+ins.length]= {inputs: {number:""+xx[0], context: "objects", noun: xx[1], simple: true},output:xx[3].trim()};
             }
 
             return outs;
@@ -349,7 +397,7 @@ class Tests {
 
             for (let i=0; i<ins.length; i += 1) {
                 let xx = ins[i];
-                outs[i]= {inputs: {number:xx[0], context: "objects", noun: xx[1], minSimple:-1}, output:xx[2].trim()};
+                outs[i]= {inputs: {number:xx[0], context: "objects", noun: xx[1], simple:false}, output:xx[2].trim()};
                 outs[i+ins.length]= {inputs: {number:xx[0], context: "objects", noun: xx[1]},    output:xx[3].trim()};
             }
             return outs;
@@ -359,8 +407,11 @@ class Tests {
         function table9s() {
             // Nominative case only.
             let ins = [
-[1, 'fear','fear amháin'],
-[1, 'bean','bean amháin'],
+                
+//[1, 'fear','fear amháin'],   // Believe the following form is also allowed and that is waht we support.
+//[1, 'bean','bean amháin'],
+[1, "fear", "fear"],
+[1, "bean", "bean"],
 [2, 'bean','beirt bhan'],
 [3, 'bádóir','triúr bádóirí'],
 [4, 'scoláire','ceathrar scoláirí'], 
@@ -454,9 +505,119 @@ class Tests {
             }
             return outs;
         }
-    }
     
+        
+        function table9y() {
+            let ins = [
+["1/2", " leath"],
+["1/3", " trian"],
+["1/4", " ceathrú"],
+["1/5", " cúigiú"],
+["1/6", " séú"],
+["1/7", " seachtú"],
+["1/8", " ochtú"],
+["1/9", " naoú"],
+["1/10", " deichiú"],
+["1/11", " aondéagú"],
+["1/12", " dódhéagú"],
+["1/13", " trídéagú"],
+["1/14", " ceathairdéagú"],
+["1/15", " cúigdéagú"],
+["1/16", " sédéagú"],
+["1/17", " seachtdéagú"],
+["1/18", " ochtdéagú"],
+["1/19", " naoidéagú"]]; 
+            let outs = [];
+            for (let i=0; i<ins.length; i += 1) {
+                let xx = ins[i];
+                outs[i]= {inputs: {number:xx[0]},output:xx[1].trim()};
+            }
+            return outs;
+        
+               
+        }
+        
+        function table9aa() {
+            let ins = [
+["3/2", " trí leath"], 
+["2/11", " dhá aondéagú"], 
+["4/30", " ceithre thríochadú"],
+["2/3", " dhá thrian"],
+["3/12", " trí dhódhéagú"], 
+["5/40", " cúig dhaicheadú"],
+["5/4", " cúig cheathrú"],
+["4/13", " ceithre thrídéagú"],
+["6/50", " sé chaogadú"],
+["4/7", " ceithre sheachtú"],
+["7/16", " seacht sédéagú"], 
+["9/80", " naoi n-ochtódú"],
+["8/9", " ocht naoú"], 
+["9/18", " naoi n-ochtdéagú"],
+["9/100", " naoi gcéadú"],
+["9/10", " naoi ndeichiú"],
+["6/19", " sé naoidéagú "],
+["3/1000", " trí mhíliú"],
+["10/3", " deich dtreana "],
+["3/20", " trí fichiú "],
+["5/1000000", " cúig mhilliúnú"]];
+            let outs = [];
+            for (let i=0; i<ins.length; i += 1) {
+                let xx = ins[i];
+                outs[i]= {inputs: {number:xx[0]},output:xx[1].trim()};
+            }
+            return outs;
 
+        } 
+        
+        // Testing only the implemented mode illustrated in this table.
+        // One of the examples renders to a different format.
+        function table9dd() {
+            let ins=[
+["23/29", "fiche a trí ar fiche a naoi"],
+// Since the denominator is expressable as a single word  we use the format in table 9aa for this fraction. 
+// ["13/30", "a trí déag ar thríocha"],
+["32/81", "tríocha a dó ar ochtó a haon"],
+["81/84", "ochtó a haon ar ochtó a ceathair"]];
+            let outs = [];
+            for (let i=0; i<ins.length; i += 1) {
+                let xx = ins[i];
+                outs[i]= {inputs: {number:xx[0]},output:xx[1].trim()};
+            }
+            return outs;
+
+        }
+        
+        // Tests of decimal and signed numbers
+        function plusMinusDecimal() {
+            let ins = [
+                ["-1", "lúide a haon"],
+                ["+1", "moide a haon"],
+                ["- 21", "lúide fiche a haon "],
+                ["+ 21", "moide fiche a haon "],
+                ["1.1", "a haon ponc a haon"],
+                ["1.203", "a haon ponc a dó náid a trí"],
+                ["-10.724", "lúide a deich ponc a seacht a dó a ceathair"],
+                ["+11.0001", "moide a haon déag ponc náid náid náid a haon"],
+                // The next few are from the standard in the text of section 9.9
+                ["1.7", "a haon ponc a seacht"],
+                ["22.4", "fiche a dó ponc a ceathair"],
+                ["84.22", "ochtó a ceathair ponc a dó a dó"],
+                ["1.2", "a haon ponc a dó gram", "gram"],
+                ["1.5", "a haon ponc a cúig cileagram", "cileagram"],
+                ["7.4", "a seacht ponc a ceathair méadar ciúbach", "méadar ciúbach"]];
+                
+            let outs = [];
+            for (let i=0; i<ins.length; i += 1) {
+                let xx = ins[i];
+                outs[i]= {inputs: {number:xx[0]},output:xx[1].trim()};
+                // Just a few have nouns.
+                if (ins[i][2]) {
+                    outs[i].inputs.noun = ins[i][2];
+                }
+            }
+            return outs;
+        }
+    }
 }
 
 export default Tests;
